@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "assay"
+version = "0.0.1"
+description = "Audit-first evaluation primitives for AI in high-consequence domains — grounding, anti-fabrication gating, drift, and honest baselines."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Stephen Chu" }]
+license = { text = "MIT" }
+dependencies = []   # pure-python core — the primitives carry no heavy deps
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+# graders that need them land behind extras as they're added:
+# llm = ["anthropic>=0.40"]
+# tracing = ["arize-phoenix>=5.0", "opentelemetry-sdk>=1.27"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
