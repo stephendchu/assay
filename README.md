@@ -59,6 +59,12 @@ src/assay/
   apps/change_approval/                # reference workflow (SOX ITGC change mgmt)
 ```
 
+## Governance docs
+Running AI in a regulated environment is a *controlled process*, documented like any
+financially-relevant system — see **[docs/](docs/)**: data flow, stakeholders / RACI,
+the control register, auditable artifacts, validation (golden dataset), observability,
+runbook & escalation.
+
 ## Roadmap
 **Full plan & the decisions behind it: [ROADMAP.md](ROADMAP.md).**
 
