@@ -1,5 +1,8 @@
 # assay
 
+> **🛡 Govern (capstone)** · part 3 of a 3-part series on measuring & governing AI in regulated domains —
+> [🔎 Validate](https://github.com/stephendchu/agentic-test-eval) · [📊 Measure](https://github.com/stephendchu/filing-event-eval) · **Govern (here)**
+
 **Audit-first evaluation *and a governance control plane* for AI in high-consequence, regulated domains.**
 
 > I build evaluation systems that define *correctness* for agentic and LLM-based
@@ -57,6 +60,8 @@ src/assay/
 ```
 
 ## Roadmap
+**Full plan & the decisions behind it: [ROADMAP.md](ROADMAP.md).**
+
 - `faithfulness` — entailment scoring (does the evidence support the conclusion?).
 - `experiment` — baseline-vs-treatment runner + bootstrap CIs (honest nulls).
 - LLM control-mapper behind the same step interface (today's mapper is deterministic).
