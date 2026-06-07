@@ -34,10 +34,22 @@ environments.
    *measured* capstone, not just orchestration.
 
 ## Build order
-1. LLM judgment step (behind the existing deterministic step interface).
-2. Team-handoff report + ops (clean / issues) report as first-class artifacts.
-3. Observability (Phoenix / OTel) feeding the ops report.
-4. Eval layer + gold set (revisit hand-verification then).
-5. Reference app #2 — incident runbook (SLA + escalation).
+Each step ships code **and** its governance doc together — the doc isn't an
+afterthought, it's part of the deliverable. (✅ = doc already drafted in
+[`docs/`](docs/); 🔧 = doc finalized when this step lands.)
+
+0. **Governance spine** — DATA_FLOW, STAKEHOLDERS/RACI, CONTROLS, ARTIFACTS,
+   VALIDATION drafted up front. ✅ *(done)*
+1. **LLM judgment step** (control mapping + evidence sufficiency, behind the existing
+   deterministic step interface). → exercises **CONTROLS.md** against real model
+   behavior; needs `ANTHROPIC_API_KEY`.
+2. **Team-handoff + ops reports** as first-class artifacts. 🔧 finalizes
+   **ARTIFACTS.md** (report schemas + audit-hash).
+3. **Observability** (Phoenix / OTel) feeding the ops "clean vs. issues" report.
+   🔧 finalizes **OBSERVABILITY.md** (spans → SLIs → ops queue).
+4. **Eval layer + gold set** (revisit hand-verification). 🔧 finalizes
+   **VALIDATION.md** (metrics + acceptance thresholds).
+5. **Reference app #2 — incident runbook** (SLA + escalation). 🔧 finalizes
+   **RUNBOOK.md** + **ESCALATION.md** (SLA targets, SEV tiers, on-call).
 
 *Public / synthetic data only — never employer control, ticket, or audit data.*
