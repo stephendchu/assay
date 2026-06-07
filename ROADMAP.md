@@ -45,7 +45,8 @@ afterthought, it's part of the deliverable. (✅ = doc already drafted in
    behavior; needs `ANTHROPIC_API_KEY`.
 2. **Team-handoff + ops reports** as first-class artifacts. 🔧 finalizes
    **ARTIFACTS.md** (report schemas + audit-hash).
-3. **Observability** (Phoenix / OTel) feeding the ops "clean vs. issues" report.
+3. **Observability** — OpenTelemetry / OpenInference (vendor-neutral; Phoenix default,
+   W&B Weave export, self-host for on-prem) feeding the ops "clean vs. issues" report.
    🔧 finalizes **OBSERVABILITY.md** (spans → SLIs → ops queue).
 4. **Eval layer + gold set** (revisit hand-verification). 🔧 finalizes
    **VALIDATION.md** (metrics + acceptance thresholds).
