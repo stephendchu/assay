@@ -14,6 +14,8 @@ import json
 from assay import llm
 from assay.apps.change_approval.controls import CONTROLS
 from assay.gate import Claim, Verdict, evaluate
+from assay.grounding import is_grounded
+from assay.plane.audit import AuditLog
 from assay.plane.core import Run, RunContext, Status, StepResult
 
 
@@ -162,15 +164,75 @@ def map_controls_llm(ctx: RunContext, judge=None) -> StepResult:
     return StepResult(Status.OK, f"{len(ctx.state['claims'])} controls mapped by model ({model})")
 
 
-def build(*, use_llm: bool = False, judge=None) -> Run:
+def _default_reviewer(summary: dict) -> dict:
+    """Mock operator / human judge — a plain Python stand-in for an independent
+    reviewer (in production, a person in a review UI). It applies its OWN policy on
+    the independent re-check, never the agent's say-so."""
+    failed = [c for c in summary["claims"] if not c["grounded_on_recheck"]]
+    if failed:
+        return {"reviewer": "ops.reviewer", "decision": "reject",
+                "notes": f"{len(failed)} claim(s) failed independent re-check"}
+    note = "claims re-verified; exceptions noted" if summary["exceptions"] else "claims re-verified"
+    return {"reviewer": "ops.reviewer", "decision": "accept", "notes": note}
+
+
+def independent_review(ctx: RunContext, reviewer=None) -> StepResult:
+    """Management-review control OVER the agent. Independently re-performs each
+    claim's citation check against the evidence (does NOT trust the agent), then
+    hands off to an operator/judge (`reviewer`, injectable) for accept/reject.
+    A separate code path from the agent — the preparer cannot validate its own work."""
+    change = ctx.state["payload"]
+    ev = _evidence_text(change)
+    rechecked = [{"control": c["control"], "text": c["text"], "citation": c["citation"],
+                  "grounded_on_recheck": is_grounded(c.get("citation", ""), ev)}
+                 for c in ctx.state.get("claims", [])]
+    summary = {"change_id": change["id"], "claims": rechecked,
+               "exceptions": ctx.state.get("findings", []), "gate": ctx.state.get("gate", {})}
+    verdict = (reviewer or _default_reviewer)(summary)
+    ctx.artifact("independent_review.json", json.dumps({"summary": summary, "verdict": verdict}, indent=2))
+    ctx.state["review"] = verdict
+    if verdict.get("decision") != "accept":
+        return StepResult(Status.BLOCKED, f"independent review: {verdict.get('decision')} — {verdict.get('notes', '')}")
+    return StepResult(Status.OK, f"independently reviewed by {verdict.get('reviewer', 'operator')}")
+
+
+def handoff_report(ctx: RunContext) -> StepResult:
+    """Attestation report for an INDEPENDENT consuming team (audit / risk). Carries the
+    audit-log head hash so the receiver can verify integrity — the producer can't
+    silently rewrite history."""
+    change = ctx.state["payload"]
+    records = AuditLog(ctx.rundir / "audit.jsonl").records()
+    head = records[-1]["hash"] if records else "genesis"
+    report = {
+        "to": "audit-risk (independent consumer)",
+        "change_id": change["id"], "system": change.get("system"),
+        "controls_tested": [c["control"] for c in ctx.state.get("claims", [])],
+        "gate": ctx.state.get("gate", {}),
+        "independent_review": ctx.state.get("review", {}),
+        "exceptions": ctx.state.get("findings", []),
+        "approval": ctx.state.get("approvals", {}).get("change_approval"),
+        "conclusion": "exceptions noted" if ctx.state.get("findings") else "no exceptions",
+        "audit_log_head": head,
+        "verify": "AuditLog(<run>/audit.jsonl).verify() must be True; head must match audit_log_head",
+    }
+    ctx.artifact("handoff_report.json", json.dumps(report, indent=2))
+    return StepResult(Status.OK, "handoff report issued to the independent consumer")
+
+
+def build(*, use_llm: bool = False, judge=None, reviewer=None) -> Run:
     """`use_llm=True` swaps in the model-backed mapper (reproducible: temp 0, pinned
-    model, prompt + raw output logged). `judge` overrides the live model for offline
-    tests. Default stays deterministic so the suite runs with no key."""
+    model, prompt + raw output logged). `judge`/`reviewer` override the live model /
+    the mock operator for offline tests. Default stays deterministic, key-free.
+
+    SoD across the pipeline: agent (preparer) → gate (system) → independent review
+    (operator/judge) → maker-checker (approver ≠ author) → handoff (consumer)."""
     mapper = (lambda ctx: map_controls_llm(ctx, judge)) if use_llm else map_controls
     return Run(name="change-approval", steps=[
         ("ingest", ingest),
         ("map_controls", mapper),
         ("gate", gate),
+        ("independent_review", lambda ctx: independent_review(ctx, reviewer)),
         ("human_approval", human_approval),
         ("emit_workpaper", emit_workpaper),
+        ("handoff_report", handoff_report),
     ])

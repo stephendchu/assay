@@ -45,3 +45,28 @@ def test_llm_mapping_is_logged_for_reproducibility(tmp_path):
     res = run.execute(CLEAN_CHANGE)
     rec = json.loads((res.rundir / "artifacts" / "llm_mapping.json").read_text())
     assert rec["temperature"] == 0 and rec["prompt"] and rec["response"]
+
+
+def test_independent_review_accepts_grounded(tmp_path):
+    run = build(use_llm=True, judge=_grounded_judge); run.root = tmp_path
+    res = run.execute(CLEAN_CHANGE)
+    assert res.status is Status.AWAITING_APPROVAL          # passed gate + independent review
+    assert res.state["review"]["decision"] == "accept"
+
+
+def test_independent_reviewer_can_reject(tmp_path):
+    reject = lambda summary: {"reviewer": "ops", "decision": "reject", "notes": "not satisfied"}
+    run = build(use_llm=True, judge=_grounded_judge, reviewer=reject); run.root = tmp_path
+    res = run.execute(CLEAN_CHANGE)
+    assert res.status is Status.BLOCKED                     # the operator, not the agent, stopped it
+
+
+def test_handoff_report_carries_audit_hash(tmp_path):
+    run = build(use_llm=True, judge=_grounded_judge); run.root = tmp_path
+    res = run.execute(CLEAN_CHANGE)
+    record_approval(res.rundir, "change_approval", approver="a.singh")
+    res = run.execute(CLEAN_CHANGE)
+    assert res.status is Status.COMPLETED
+    rep = json.loads((res.rundir / "artifacts" / "handoff_report.json").read_text())
+    assert rep["audit_log_head"] and rep["independent_review"]["decision"] == "accept"
+    assert rep["to"].startswith("audit-risk")
