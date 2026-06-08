@@ -48,6 +48,7 @@ def map_controls(ctx: RunContext) -> StepResult:
 
     ctx.state["claims"] = claims
     ctx.state["findings"] = findings
+    ctx.state["abstentions"] = []   # naive baseline never abstains (it over-claims instead)
     return StepResult(Status.OK, f"{len(claims)} controls mapped, {len(findings)} finding(s)")
 
 
@@ -55,15 +56,22 @@ def gate(ctx: RunContext) -> StepResult:
     src = _evidence_text(ctx.state["payload"])
     claims = [Claim(c["text"], c["citation"]) for c in ctx.state["claims"]]
     decision = evaluate(claims, src)
+    abstentions = ctx.state.get("abstentions", [])
+    verdict = decision.verdict
+    if verdict is not Verdict.BLOCK and abstentions:
+        verdict = Verdict.REVIEW              # the agent abstained -> escalate to a human
     ctx.state["gate"] = {
-        "verdict": decision.verdict.value,
+        "verdict": verdict.value,
         "grounded": decision.grounded,
         "ungrounded": decision.ungrounded,
+        "abstentions": len(abstentions),
         "reasons": decision.reasons,
     }
-    if decision.verdict is Verdict.BLOCK:
+    if verdict is Verdict.BLOCK:
         return StepResult(Status.BLOCKED,
                           f"anti-fabrication gate: {decision.ungrounded} unciteable assertion(s)")
+    if verdict is Verdict.REVIEW:
+        return StepResult(Status.OK, f"{len(abstentions)} abstention(s) -> routed to human review")
     return StepResult(Status.OK, "all control assertions grounded in evidence")
 
 
@@ -99,10 +107,13 @@ def emit_workpaper(ctx: RunContext) -> StepResult:
 _MAP_PROMPT = """You are a SOX ITGC auditor. Given a change record and its evidence,
 decide which controls are satisfied and cite the EXACT evidence text for each.
 
-Return ONLY a JSON array; each item:
-{{"control": "<id>", "text": "<short assertion>", "citation": "<span copied VERBATIM from the evidence>"}}
-Copy every citation verbatim from the EVIDENCE — never paraphrase or invent. Omit any
-control the evidence does not support.
+Return ONLY a JSON object:
+{{"claims": [{{"control": "<id>", "text": "<short assertion>", "citation": "<span copied VERBATIM from evidence>"}}],
+  "abstentions": [{{"control": "<id>", "reason": "<why you cannot determine it>"}}]}}
+
+Rules: copy every citation verbatim from the EVIDENCE — never paraphrase or invent.
+If the evidence is missing or too ambiguous to determine a control, put it under
+"abstentions" (do NOT guess). Only put a control under "claims" when you can cite evidence.
 
 CONTROLS:
 {controls}
@@ -119,21 +130,29 @@ def _controls_text() -> str:
     return "\n".join(f"{cid}: {desc}" for cid, desc in CONTROLS.items())
 
 
-def _parse_claims(raw: str) -> list[dict]:
-    """Tolerant parse of the model's JSON array of cited control assertions."""
-    if not raw or "[" not in raw or "]" not in raw:
-        return []
+def _parse_output(raw: str):
+    """Tolerant parse of the model's output -> (claims, abstentions). Accepts a JSON
+    array of claims (legacy) or a JSON object {"claims": [...], "abstentions": [...]}."""
+    if not raw:
+        return [], []
+    s = raw.strip().strip("`").strip()
+    if s[:4].lower() == "json":
+        s = s[4:].strip()
     try:
-        data = json.loads(raw[raw.find("[") : raw.rfind("]") + 1])
+        if s.lstrip().startswith("{"):
+            obj = json.loads(s[s.find("{") : s.rfind("}") + 1])
+            claims_raw, abst_raw = obj.get("claims", []), obj.get("abstentions", [])
+        else:
+            claims_raw, abst_raw = json.loads(s[s.find("[") : s.rfind("]") + 1]), []
     except Exception:
-        return []
-    out = []
-    for d in data if isinstance(data, list) else []:
-        if isinstance(d, dict) and d.get("citation"):
-            out.append({"control": str(d.get("control", "")),
-                        "text": str(d.get("text", "")),
-                        "citation": str(d.get("citation", ""))})
-    return out
+        return [], []
+    claims = [{"control": str(d.get("control", "")), "text": str(d.get("text", "")),
+               "citation": str(d.get("citation", ""))}
+              for d in (claims_raw if isinstance(claims_raw, list) else [])
+              if isinstance(d, dict) and d.get("citation")]
+    abst = [{"control": str(d.get("control", "")), "reason": str(d.get("reason", ""))}
+            for d in (abst_raw if isinstance(abst_raw, list) else []) if isinstance(d, dict)]
+    return claims, abst
 
 
 def map_controls_llm(ctx: RunContext, judge=None) -> StepResult:
@@ -154,14 +173,16 @@ def map_controls_llm(ctx: RunContext, judge=None) -> StepResult:
     ctx.artifact("llm_mapping.json", json.dumps(
         {"model": model, "temperature": 0, "prompt": prompt, "response": raw}, indent=2))
 
-    ctx.state["claims"] = _parse_claims(raw)
+    claims, abstentions = _parse_output(raw)
+    ctx.state["claims"] = claims
+    ctx.state["abstentions"] = abstentions
     ev = change.get("evidence", {})
     findings = []
     if ev.get("approver") and ev["approver"] == change.get("author"):
         findings.append({"control": "ITGC-CM-02", "severity": "deficiency",
                          "detail": f"self-approval: {change['author']} approved their own change"})
     ctx.state["findings"] = findings
-    return StepResult(Status.OK, f"{len(ctx.state['claims'])} controls mapped by model ({model})")
+    return StepResult(Status.OK, f"{len(claims)} mapped, {len(abstentions)} abstained ({model})")
 
 
 def _default_reviewer(summary: dict) -> dict:

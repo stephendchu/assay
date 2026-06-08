@@ -70,3 +70,19 @@ def test_handoff_report_carries_audit_hash(tmp_path):
     rep = json.loads((res.rundir / "artifacts" / "handoff_report.json").read_text())
     assert rep["audit_log_head"] and rep["independent_review"]["decision"] == "accept"
     assert rep["to"].startswith("audit-risk")
+
+
+def _abstaining_judge(_prompt):
+    return json.dumps({
+        "claims": [{"control": "ITGC-CM-01", "text": "authorized",
+                    "citation": "Change CHG-1042 approved by j.lee on 2026-03-04, prior to deployment."}],
+        "abstentions": [{"control": "ITGC-CM-03", "reason": "no test evidence found"}],
+    })
+
+
+def test_abstention_routes_to_review(tmp_path):
+    run = build(use_llm=True, judge=_abstaining_judge); run.root = tmp_path
+    res = run.execute(CLEAN_CHANGE)
+    assert res.state["gate"]["verdict"] == "review"      # abstained -> human, not auto-approve
+    assert res.state["gate"]["abstentions"] == 1
+    assert res.status is Status.AWAITING_APPROVAL
