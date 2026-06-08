@@ -3,66 +3,69 @@
 > **🛡 Govern (capstone)** · part 3 of a 3-part series on measuring & governing AI in regulated domains —
 > [🔎 Validate](https://github.com/stephendchu/agentic-test-eval) · [📊 Measure](https://github.com/stephendchu/filing-event-eval) · **Govern (here)**
 
-**Audit-first evaluation *and a governance control plane* for AI in high-consequence, regulated domains.**
+**An audit-first evaluation & governance control plane for AI in high-consequence, regulated domains.**
 
-> I build evaluation systems that define *correctness* for agentic and LLM-based
-> software — grounded, anti-fabrication, and auditable — and run them like an
-> SRE: deterministic, checkpointed, gated, human-approved, and provable.
+The hard part isn't getting an LLM to read messy compliance evidence — it's being able to
+**prove** its judgments are right, **refuse** the ones that aren't, and **defend** the whole
+thing to an auditor. `assay` is that layer: it lets an LLM do the reading, then grounds,
+gates, reviews, and audits every decision so a wrong answer can't quietly ship.
 
-Two layers, one repo:
-- **Eval core** — grounding, anti-fabrication gating, composable graders.
-- **Control plane** (`assay.plane`) — a deterministic, checkpointed run loop with
-  eval **gates**, **maker-checker** human approval, durable **artifacts**, and a
-  **tamper-evident audit log**.
+> The stance: *you don't make the model trustworthy — you make the **system** trustworthy despite the model.*
 
-Demonstrated across domains (the proof it generalizes):
-- **[filing-event-eval](https://github.com/stephendchu/filing-event-eval)** — grounded event extraction from SEC filings (measure / trust).
-- **[agentic-test-eval](https://github.com/stephendchu/agentic-test-eval)** — does repo-aware tooling help an agent write better tests? (validate).
-- **`assay.apps.change_approval`** — SOX **ITGC change-management** control testing (govern), included here.
+---
 
-## The stance
-An eval in a high-consequence domain isn't a leaderboard score — it's a
-**decision you can defend.** So `assay` is built around:
-1. **Grounding over judgment** — verifiable checks over fuzzy LLM-judge scores.
-2. **Anti-fabrication by default** — a claim you can't trace doesn't ship.
-3. **Auditability** — every decision emits tamper-evident provenance.
-4. **Deterministic, resumable process** — gates and human sign-offs pause a run;
-   it resumes from checkpoint with no recomputation.
+## What's here
+A reusable **engine** + **two regulated domains** running on it (the proof it generalizes):
+
+- **🏦 `apps/personal_trade` — flagship.** Personal-account-dealing (PAD) surveillance:
+  reconcile an employee trade against Legal pre-approvals, emails, a blackout list, and
+  covered accounts; flag pre-clearance / timing / blackout violations.
+- **📋 `apps/change_approval` — the clean proof.** SOX **ITGC change-management** control
+  testing: did a production change meet the controls (authorized, tested, segregation of duties)?
+
+Same engine under both — that's the point.
+
+## Three layers of defense
+An LLM is fallible, so no single check is trusted. Every decision passes through:
+
+1. **Grounding gate** — every claim must cite **verbatim** evidence; a *fabricated* citation
+   is **BLOCK**ed. *(Catches hallucination.)*
+2. **Deterministic rules** — the logic (timing, list membership, SoD) is **computed in code**,
+   never left to the model. *(Catches wrong conclusions drawn from real evidence.)*
+3. **Abstention → human** — when evidence is genuinely ambiguous, the model **abstains**
+   ("an informal 'go ahead' isn't a formal approval") and the case is routed to a human
+   review queue. *(Punts the unknowable; never guesses.)*
+
+Around the run: **reproducibility** (temperature 0, pinned model, prompt + raw output logged),
+an **independent review** (a separate operator re-performs the check — the preparer never
+validates its own work), a **maker-checker** approval (≠ author), a **tamper-evident audit
+log**, and a **3rd-party handoff report**.
 
 ## Quickstart
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q
-python examples/quickstart.py              # the anti-fabrication gate
-python examples/change_approval_demo.py    # the full governed workflow
+python examples/change_approval_demo.py    # SOX change-mgmt: the gate blocks a fabricated approval
+python examples/personal_trade_demo.py     # PAD: clears / violations / punts-to-human
+python examples/review_queue_demo.py       # stratified human-review queue
 ```
-
-## The change-approval workflow (reference app)
-A synthetic change record flows through the control plane:
-
-`ingest → map to ITGC controls (cited) → anti-fabrication GATE → maker-checker approval → auditable workpaper`
-
-- A change citing an **approval that isn't in the evidence** → the gate **BLOCKS** it.
-- A clean change → **pauses for an independent reviewer** (segregation of duties),
-  then resumes and issues a **workpaper** artifact.
-- A **self-approved** change → grounded, but the workpaper records the **SoD deficiency**.
-
-*Public / synthetic data only — generic COSO/ITGC language + made-up tickets.
-Never any employer control, ticket, or audit data.*
+Model-backed runs use any backend — Claude or a **free** OpenAI-compatible one (see
+`.env.example`). The whole test suite runs **offline, no key.**
 
 ## Proofs (show, don't tell)
-Each guarantee is backed by a **test** (`pytest -q`) *and* an **artifact you can open**
-in [`examples/sample_run/`](examples/sample_run/) — not just a claim in prose:
+Each guarantee is backed by a **test** (`pytest -q`) *and* an **artifact you can open** in
+[`examples/sample_run/`](examples/sample_run/):
 
 | Guarantee | Proof |
 |---|---|
-| **Reproducible AI control** — temperature 0, pinned model, full prompt + raw output + model id logged | test `test_llm_mapping_is_logged_for_reproducibility` · artifact [`sample_run/clean/artifacts/llm_mapping.json`](examples/sample_run/clean/artifacts/llm_mapping.json) |
-| **Anti-fabrication** — a fabricated citation is blocked; nothing ships | test `test_llm_fabricated_citation_is_blocked` · artifact [`sample_run/blocked/audit.jsonl`](examples/sample_run/blocked/audit.jsonl) (verdict **BLOCK**) |
+| **Reproducible AI control** — temp 0, pinned model, prompt + raw output + model id logged | test `test_llm_mapping_is_logged_for_reproducibility` · [`sample_run/clean/artifacts/llm_mapping.json`](examples/sample_run/clean/artifacts/llm_mapping.json) |
+| **Anti-fabrication** — a fabricated citation is **BLOCK**ed | test `test_llm_fabricated_citation_is_blocked` · [`sample_run/blocked/audit.jsonl`](examples/sample_run/blocked/audit.jsonl) |
+| **Abstention → human** — ambiguous evidence routes to REVIEW, not a guess | tests `test_abstention_routes_to_review`, `test_ambiguous_punts_to_human` |
+| **Deterministic rule logic** — timing / blackout decided in code, not by the model | tests `test_late_preapproval_is_a_violation`, `test_blackout_trade_is_a_violation` |
+| **Independent review** — a separate operator re-performs the check (not the agent) | test `test_independent_reviewer_can_reject` |
 | **Tamper-evident audit log** — edit any record and `verify()` fails | test `test_audit_tamper_is_detected` |
-| **Idempotent / resumable** — a paused/blocked run resumes with no recomputation | test `test_block_halts_and_resume_is_idempotent` |
-| **Maker-checker (SoD)** — approver must differ from author | test `test_clean_change_pauses_then_completes` |
-| **Faithfulness by entailment** (not brittle substring) | test `test_faithfulness.py` |
+| **Idempotent / resumable** — a paused run resumes, no recomputation | test `test_block_halts_and_resume_is_idempotent` |
 | **Measured eval** — gold set, control-F1 + bootstrap CIs, an *honest* baseline finding | [docs/EVAL.md](docs/EVAL.md) · test `test_deterministic_baseline_runs_and_scores` |
 
 *Offline samples use an injected judge (no key) so they're reproducible; a live run logs the real model id.*
@@ -70,24 +73,31 @@ in [`examples/sample_run/`](examples/sample_run/) — not just a claim in prose:
 ## Layout
 ```
 src/assay/
-  grounding.py gate.py graders.py      # eval core
-  plane/ audit.py core.py              # control plane (deterministic, audited)
-  apps/change_approval/                # reference workflow (SOX ITGC change mgmt)
+  grounding.py gate.py graders.py faithfulness.py llm.py eval.py review.py   # the engine
+  plane/  audit.py core.py                                                   # deterministic, audited run loop
+  apps/personal_trade/    # flagship domain — PAD surveillance
+  apps/change_approval/   # proof domain — SOX ITGC change-management
 ```
 
 ## Governance docs
 Running AI in a regulated environment is a *controlled process*, documented like any
-financially-relevant system — see **[docs/](docs/)**: data flow, stakeholders / RACI,
-the control register, auditable artifacts, validation (golden dataset), observability,
-runbook & escalation.
+financially-relevant system — see **[docs/](docs/)**: data flow, stakeholders / RACI, the
+control register, auditable artifacts, validation (golden dataset), observability
+(vendor-neutral), runbook (SLAs + retention), escalation.
+
+## Scope & limits (what it deliberately does *not* do)
+- It verifies a claim is **traceable to the evidence** — *not* that the evidence is
+  **authentic**. A forged approval that's faithfully cited still passes the gate; evidence
+  authenticity and **population completeness** (the change that bypassed the process) are
+  *separate* controls, on the roadmap.
+- Assurance is by **measured reliability + sampling**, not exhaustive review — the gold set
+  is small and synthetic; recall is "vs the labels we wrote," not omniscience.
+- It's a **reference implementation**, not a production platform (no concurrency / durability
+  / multi-tenant hardening — out of scope by design).
 
 ## Roadmap
-**Full plan & the decisions behind it: [ROADMAP.md](ROADMAP.md).**
+Full plan & the decisions behind it: **[ROADMAP.md](ROADMAP.md)**. Next: live
+model-vs-baseline eval number · Phoenix/OTel trace · source adapters (CSV/JSON/XML/email) ·
+external audit-log anchoring · population reconciliation.
 
-- `faithfulness` — entailment scoring (does the evidence support the conclusion?).
-- `experiment` — baseline-vs-treatment runner + bootstrap CIs (honest nulls).
-- LLM control-mapper behind the same step interface (today's mapper is deterministic).
-- More reference apps on the same plane: incident-runbook, financial-close.
-- `tracing` — Phoenix / OpenTelemetry hooks.
-
-*Public-data / synthetic only. No proprietary content.*
+*Public / synthetic data only. No proprietary content.*
