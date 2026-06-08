@@ -63,6 +63,7 @@ in [`examples/sample_run/`](examples/sample_run/) — not just a claim in prose:
 | **Idempotent / resumable** — a paused/blocked run resumes with no recomputation | test `test_block_halts_and_resume_is_idempotent` |
 | **Maker-checker (SoD)** — approver must differ from author | test `test_clean_change_pauses_then_completes` |
 | **Faithfulness by entailment** (not brittle substring) | test `test_faithfulness.py` |
+| **Measured eval** — gold set, control-F1 + bootstrap CIs, an *honest* baseline finding | [docs/EVAL.md](docs/EVAL.md) · test `test_deterministic_baseline_runs_and_scores` |
 
 *Offline samples use an injected judge (no key) so they're reproducible; a live run logs the real model id.*
 
