@@ -1,0 +1,20 @@
+{
+  "change_id": "CHG-1042",
+  "system": "billing-engine",
+  "controls_tested": [
+    "ITGC-CM-01",
+    "ITGC-CM-03"
+  ],
+  "gate": {
+    "verdict": "approve",
+    "grounded": 2,
+    "ungrounded": 0,
+    "reasons": []
+  },
+  "exceptions": [],
+  "approval": {
+    "approver": "a.singh",
+    "decision": "approved"
+  },
+  "conclusion": "no exceptions"
+}

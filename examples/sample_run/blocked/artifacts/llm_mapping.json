@@ -1,0 +1,6 @@
+{
+  "model": "injected-judge",
+  "temperature": 0,
+  "prompt": "You are a SOX ITGC auditor. Given a change record and its evidence,\ndecide which controls are satisfied and cite the EXACT evidence text for each.\n\nReturn ONLY a JSON array; each item:\n{\"control\": \"<id>\", \"text\": \"<short assertion>\", \"citation\": \"<span copied VERBATIM from the evidence>\"}\nCopy every citation verbatim from the EVIDENCE \u2014 never paraphrase or invent. Omit any\ncontrol the evidence does not support.\n\nCONTROLS:\nITGC-CM-01: All changes to production systems supporting financial reporting must be authorized via an approved change request prior to deployment.\nITGC-CM-02: Changes must be approved by someone independent of the developer (segregation of duties).\nITGC-CM-03: Changes must be tested and the results documented before promotion to production.\n\nCHANGE (excluding evidence):\n{\"id\": \"CHG-1042\", \"system\": \"billing-engine\", \"in_scope\": true, \"summary\": \"Adjust invoice rounding in the production billing pipeline.\", \"author\": \"m.chu\"}\n\nEVIDENCE:\nChange CHG-1042 approved by j.lee on 2026-03-04, prior to deployment. j.lee Unit and regression tests passed; results attached 2026-03-03. 2026-03-05\n",
+  "response": "[{\"control\": \"ITGC-CM-01\", \"text\": \"authorized\", \"citation\": \"Approved by the CEO on January 1st.\"}]"
+}

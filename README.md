@@ -51,6 +51,21 @@ A synthetic change record flows through the control plane:
 *Public / synthetic data only — generic COSO/ITGC language + made-up tickets.
 Never any employer control, ticket, or audit data.*
 
+## Proofs (show, don't tell)
+Each guarantee is backed by a **test** (`pytest -q`) *and* an **artifact you can open**
+in [`examples/sample_run/`](examples/sample_run/) — not just a claim in prose:
+
+| Guarantee | Proof |
+|---|---|
+| **Reproducible AI control** — temperature 0, pinned model, full prompt + raw output + model id logged | test `test_llm_mapping_is_logged_for_reproducibility` · artifact [`sample_run/clean/artifacts/llm_mapping.json`](examples/sample_run/clean/artifacts/llm_mapping.json) |
+| **Anti-fabrication** — a fabricated citation is blocked; nothing ships | test `test_llm_fabricated_citation_is_blocked` · artifact [`sample_run/blocked/audit.jsonl`](examples/sample_run/blocked/audit.jsonl) (verdict **BLOCK**) |
+| **Tamper-evident audit log** — edit any record and `verify()` fails | test `test_audit_tamper_is_detected` |
+| **Idempotent / resumable** — a paused/blocked run resumes with no recomputation | test `test_block_halts_and_resume_is_idempotent` |
+| **Maker-checker (SoD)** — approver must differ from author | test `test_clean_change_pauses_then_completes` |
+| **Faithfulness by entailment** (not brittle substring) | test `test_faithfulness.py` |
+
+*Offline samples use an injected judge (no key) so they're reproducible; a live run logs the real model id.*
+
 ## Layout
 ```
 src/assay/
