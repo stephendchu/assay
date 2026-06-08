@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 
+from assay import llm
+from assay.apps.change_approval.controls import CONTROLS
 from assay.gate import Claim, Verdict, evaluate
 from assay.plane.core import Run, RunContext, Status, StepResult
 
@@ -92,10 +94,82 @@ def emit_workpaper(ctx: RunContext) -> StepResult:
     return StepResult(Status.OK, "workpaper issued")
 
 
-def build() -> Run:
+_MAP_PROMPT = """You are a SOX ITGC auditor. Given a change record and its evidence,
+decide which controls are satisfied and cite the EXACT evidence text for each.
+
+Return ONLY a JSON array; each item:
+{{"control": "<id>", "text": "<short assertion>", "citation": "<span copied VERBATIM from the evidence>"}}
+Copy every citation verbatim from the EVIDENCE — never paraphrase or invent. Omit any
+control the evidence does not support.
+
+CONTROLS:
+{controls}
+
+CHANGE (excluding evidence):
+{change}
+
+EVIDENCE:
+{evidence}
+"""
+
+
+def _controls_text() -> str:
+    return "\n".join(f"{cid}: {desc}" for cid, desc in CONTROLS.items())
+
+
+def _parse_claims(raw: str) -> list[dict]:
+    """Tolerant parse of the model's JSON array of cited control assertions."""
+    if not raw or "[" not in raw or "]" not in raw:
+        return []
+    try:
+        data = json.loads(raw[raw.find("[") : raw.rfind("]") + 1])
+    except Exception:
+        return []
+    out = []
+    for d in data if isinstance(data, list) else []:
+        if isinstance(d, dict) and d.get("citation"):
+            out.append({"control": str(d.get("control", "")),
+                        "text": str(d.get("text", "")),
+                        "citation": str(d.get("citation", ""))})
+    return out
+
+
+def map_controls_llm(ctx: RunContext, judge=None) -> StepResult:
+    """Model-backed control mapping. Reproducible: temperature 0, pinned model, and
+    the full prompt + raw response + model id logged for re-performance/audit.
+    `judge` (a prompt->text callable) overrides the live model for offline tests."""
+    change = ctx.state["payload"]
+    prompt = _MAP_PROMPT.format(
+        controls=_controls_text(),
+        change=json.dumps({k: v for k, v in change.items() if k != "evidence"}),
+        evidence=_evidence_text(change),
+    )
+    if callable(judge):
+        raw, model = judge(prompt), "injected-judge"
+    else:
+        raw, model = llm.complete(prompt, temperature=0.0), llm.model_id()
+
+    ctx.artifact("llm_mapping.json", json.dumps(
+        {"model": model, "temperature": 0, "prompt": prompt, "response": raw}, indent=2))
+
+    ctx.state["claims"] = _parse_claims(raw)
+    ev = change.get("evidence", {})
+    findings = []
+    if ev.get("approver") and ev["approver"] == change.get("author"):
+        findings.append({"control": "ITGC-CM-02", "severity": "deficiency",
+                         "detail": f"self-approval: {change['author']} approved their own change"})
+    ctx.state["findings"] = findings
+    return StepResult(Status.OK, f"{len(ctx.state['claims'])} controls mapped by model ({model})")
+
+
+def build(*, use_llm: bool = False, judge=None) -> Run:
+    """`use_llm=True` swaps in the model-backed mapper (reproducible: temp 0, pinned
+    model, prompt + raw output logged). `judge` overrides the live model for offline
+    tests. Default stays deterministic so the suite runs with no key."""
+    mapper = (lambda ctx: map_controls_llm(ctx, judge)) if use_llm else map_controls
     return Run(name="change-approval", steps=[
         ("ingest", ingest),
-        ("map_controls", map_controls),
+        ("map_controls", mapper),
         ("gate", gate),
         ("human_approval", human_approval),
         ("emit_workpaper", emit_workpaper),
