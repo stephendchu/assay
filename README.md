@@ -41,6 +41,47 @@ an **independent review** (a separate operator re-performs the check — the pre
 validates its own work), a **maker-checker** approval (≠ author), a **tamper-evident audit
 log**, and a **3rd-party handoff report**.
 
+## How it works — data flow & control gates
+
+**Data flow** — messy multi-format sources are normalized, then the LLM may cite only that evidence:
+
+```mermaid
+flowchart LR
+    S1["brokerage feed<br/>CSV / JSON"] --> AD["adapters<br/>normalize"]
+    S2["Legal pre-approvals<br/>email"] --> AD
+    S3["blackout list<br/>XML / DB"] --> AD
+    S4["covered accounts<br/>HR table"] --> AD
+    AD --> EV[("evidence<br/>the AI may cite")]
+    EV --> AI["LLM assess<br/>cited claims + abstentions"]
+```
+
+**The gated pipeline** — every decision runs the gauntlet; nothing ships unproven:
+
+```mermaid
+flowchart TD
+    AI["assess (LLM)<br/>cited claims + abstentions<br/>temp 0 · pinned · logged"] --> G1{"① grounding gate<br/>claim cited verbatim?"}
+    G1 -->|"fabricated"| BLK["BLOCK<br/>nothing ships"]
+    G1 -->|"abstained"| HQ["REVIEW<br/>→ human queue"]
+    G1 -->|"grounded"| G2["② rule checks<br/>timing · blackout · SoD<br/>computed in code"]
+    G2 --> G3{"③ independent review<br/>operator re-performs"}
+    G3 -->|"reject"| BLK
+    G3 -->|"accept"| G4{"④ maker-checker<br/>approver ≠ author"}
+    G4 --> OUT["workpaper · handoff report<br/>tamper-evident audit log"]
+    HQ --> HUM["human reviews<br/>exceptions + sampled approvals"]
+```
+
+**The gates & checks:**
+
+| # | Gate / check | Type | Catches | Outcome |
+|---|---|---|---|---|
+| ① | **Grounding gate** | deterministic (model-free) | fabricated citations (hallucination) | **BLOCK** |
+| — | **Abstention** | model self-flag | genuinely ambiguous evidence | **REVIEW** → human |
+| ② | **Rule checks** (timing, blackout, SoD) | deterministic | wrong conclusions drawn from real evidence | violation recorded |
+| ③ | **Independent review** | separate operator (re-performs) | the preparer grading its own work | reject → **BLOCK** |
+| ④ | **Maker-checker** | human (≠ author) | unauthorized sign-off | approve / hold |
+| ✓ | **Reproducibility** | logged: temp 0, pinned model, prompt + raw output | a control an auditor can't re-perform | audit artifact |
+| ✓ | **Tamper-evident audit log** | hash chain | silent edits to the trail | `verify()` fails |
+
 ## Quickstart
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
