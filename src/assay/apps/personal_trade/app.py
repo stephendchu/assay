@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 
 from assay import llm
-from assay.apps.change_approval.app import _parse_output  # reuse the tolerant parser
 from assay.apps.personal_trade.data import BLACKOUT, COVERED_ACCOUNTS
 from assay.gate import Claim, Verdict, evaluate
 from assay.plane.core import Run, RunContext, Status, StepResult
@@ -38,6 +37,30 @@ def _evidence(trade) -> str:
 def ingest(ctx: RunContext) -> StepResult:
     ctx.state["trade_id"] = ctx.state["payload"]["id"]
     return StepResult(Status.OK, f"ingested {ctx.state['payload']['id']}")
+
+
+def _parse_pad(raw: str):
+    """Tolerant parse -> (claims, abstentions), preserving rule + approval_date."""
+    if not raw:
+        return [], []
+    s = raw.strip().strip("`").strip()
+    if s[:4].lower() == "json":
+        s = s[4:].strip()
+    try:
+        if s.lstrip().startswith("{"):
+            obj = json.loads(s[s.find("{") : s.rfind("}") + 1])
+        else:
+            obj = {"claims": json.loads(s[s.find("[") : s.rfind("]") + 1]), "abstentions": []}
+    except Exception:
+        return [], []
+    claims = [{"rule": str(d.get("rule", "")), "text": str(d.get("text", "")),
+               "citation": str(d.get("citation", "")), "approval_date": str(d.get("approval_date", ""))}
+              for d in (obj.get("claims", []) if isinstance(obj.get("claims"), list) else [])
+              if isinstance(d, dict) and d.get("citation")]
+    abst = [{"rule": str(d.get("rule", "")), "reason": str(d.get("reason", ""))}
+            for d in (obj.get("abstentions", []) if isinstance(obj.get("abstentions"), list) else [])
+            if isinstance(d, dict)]
+    return claims, abst
 
 
 _ASSESS_PROMPT = """You are a personal-account-dealing (PAD) compliance analyst.
@@ -68,7 +91,7 @@ def assess_llm(ctx: RunContext, judge=None) -> StepResult:
         raw, model = llm.complete(prompt, temperature=0.0), llm.model_id()
     ctx.artifact("assessment.json", json.dumps(
         {"model": model, "temperature": 0, "prompt": prompt, "response": raw}, indent=2))
-    claims, abst = _parse_output(raw)
+    claims, abst = _parse_pad(raw)
     ctx.state["claims"], ctx.state["abstentions"] = claims, abst
     return StepResult(Status.OK, f"{len(claims)} cited, {len(abst)} abstained ({model})")
 
