@@ -14,8 +14,7 @@ dependencies = []   # pure-python core — the primitives carry no heavy deps
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-# graders that need them land behind extras as they're added:
-# llm = ["anthropic>=0.40"]
+llm = ["anthropic>=0.40", "python-dotenv>=1.0"]   # model-backed graders (entailment faithfulness, LLM mapper)
 # tracing = ["arize-phoenix>=5.0", "opentelemetry-sdk>=1.27"]
 
 [tool.setuptools.packages.find]
