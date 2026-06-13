@@ -1,6 +1,6 @@
 # assay
 
-> **🛡 Govern (capstone)** · part 3 of a 3-part series on measuring & governing AI in regulated domains —
+> **🛡 Govern — the system** · part 3 of a 3-part series on measuring & governing AI in regulated domains —
 > [🔎 Validate](https://github.com/stephendchu/agentic-test-eval) · [📊 Measure](https://github.com/stephendchu/filing-event-eval) · **Govern (here)**
 
 > *You don't make the model trustworthy — you make the **system** trustworthy despite the model.*
@@ -49,6 +49,42 @@ flowchart TD
     G4 --> OUT["workpaper · handoff report<br/>tamper-evident audit log"]
     HQ --> HUM["human reviews<br/>exceptions + sampled approvals"]
 ```
+
+## Walkthrough: one change, two outcomes
+
+The same input — `CHG-1042`, *"adjust invoice rounding in the production billing pipeline,"* author `m.chu` — runs the pipeline. The only thing that differs is what the model returns at **assess**.
+
+**Clean run — it ships:**
+
+| Stage | What happens | Decision |
+|---|---|---|
+| **assess (LLM)** | Maps two controls to verbatim evidence: `ITGC-CM-01` ← *"approved by j.lee … prior to deployment"*; `ITGC-CM-03` ← *"tests passed; results attached 2026-03-03"*. temp 0, prompt + raw output logged. | 2 cited |
+| **① grounding gate** | Both citations found verbatim in the evidence. | `grounded: 2, ungrounded: 0` → pass |
+| **② rule checks** | Author `m.chu` ≠ change-approver `j.lee` (SoD); tests dated before deploy. Computed in code. | no exception |
+| **③ independent review** | A separate operator re-performs the check. | accept |
+| **④ maker-checker** | Workpaper signer `a.singh` ≠ author `m.chu`. | approved |
+| **output** | `workpaper.json`: `"verdict": "approve"`, `"exceptions": []`, `"conclusion": "no exceptions"`, + hash-chained audit log. | **ships** |
+
+**Fabricated run — it's blocked:** same change, but the model cites an approval that *isn't in the evidence* — *"Approved by the CEO on January 1st."* The grounding gate (①) finds no matching span:
+
+> `step_result … "status": "blocked" … "reason": "anti-fabrication gate: 1 unciteable assertion(s)"`
+
+Nothing ships. The prompt and raw output are preserved in `llm_mapping.json` so the failure itself is auditable. → [`examples/sample_run/`](examples/sample_run/)
+
+## How exceptions are handled
+
+"Exception" means four different things here, and each routes differently — nothing is dropped silently:
+
+| Situation | Caught at | What happens |
+|---|---|---|
+| **Fabrication** — a claim cites evidence that doesn't exist | ① grounding gate | **BLOCK** — nothing ships. The gate is *not* ops-overridable; a block is fixed at the source, never bypassed. |
+| **Ambiguity** — evidence can't confirm a formal control (an informal "go ahead" ≠ a pre-clearance) | assess → gate | the model **abstains**; verdict becomes **REVIEW** and routes to the human queue instead of guessing. |
+| **Control failure** — the check ran on real evidence, but a control isn't met (late pre-approval, approver = author) | ② rule checks | recorded as an **exception in the workpaper** (`conclusion: VIOLATION`); SEV-4 → control-owner queue. |
+| **Step failure** — a step raises at runtime | run loop | caught, logged as `step_failed` with the error, checkpointed → run returns **FAILED** and **resumes from that step** without recomputation. Never silent. |
+
+**Who actually looks:** blocks and abstentions are human-reviewed at **100%**; clean approvals are **stratified-sampled** (default 20%) to bound the missed-error rate — assurance by sampling, not by reading every item.
+
+**When it's bigger than one workpaper:** the [escalation playbook](docs/ESCALATION.md) grades severity — from **SEV-1** (audit log fails `verify()` or a gate bypass → halt, notify immediately) down to **SEV-4** (a single workpaper exception → normal queue) — every incident referencing the immutable `run_id` + hash-chained log.
 
 ## Every guarantee is backed by a test and an artifact
 
