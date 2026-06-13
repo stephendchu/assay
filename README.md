@@ -5,7 +5,7 @@
 **Trustworthy AI for compliance — by design, not by hope.** An audit-first governance layer that puts an LLM to work on messy filings, trade records, and change tickets — then catches everything the model gets wrong *before it ships*.
 
 > **🛡 Govern — the system** · part 3 of a 3-part series on measuring & governing AI in regulated domains —
-> [🔎 Validate](https://github.com/stephendchu/agentic-test-eval) · [📊 Measure](https://github.com/stephendchu/filing-event-eval) · **Govern (here)**
+> [🔎 Validate](https://stephendchu.github.io/agentic-test-eval/) · [📊 Measure](https://stephendchu.github.io/filing-event-eval/) · **Govern (here)**
 
 > *You don't make the model trustworthy — you make the **system** trustworthy despite the model.*
 
