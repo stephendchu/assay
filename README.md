@@ -126,6 +126,18 @@ Nothing ships. The prompt and raw output are preserved in `llm_mapping.json` so 
 
 Full plan: **[ROADMAP.md](ROADMAP.md)**.
 
+## Design decisions
+
+**The grounding gate is not ops-overridable.** An exception workflow that can bypass the gate defeats its purpose — a compliance officer who can route around a block has no block. Blocks are resolved at the source (fixing the evidence or the model output) or escalated as SEV-1, never bypassed in production.
+
+**Abstention routes to human, not to a low-confidence answer.** When evidence is genuinely ambiguous, the model is prompted to abstain and flag it explicitly. A hedge (*"probably approved"*) gives a downstream system something to act on that shouldn't be acted on. Ambiguity gets a human, not a probability.
+
+**Timing, blackout, and SoD checks run in code, not in the model.** The LLM does judgment (does this text constitute sufficient evidence of approval?); deterministic rules do arithmetic (is the approval date before the trade date? is the approver the same person as the author?). These checks produce the same answer every time, are auditable by inspection, and don't vary with prompt temperature.
+
+**Stratified sampling, not exhaustive review.** 100% of blocks and abstentions are human-reviewed; clean approvals are sampled at 20%. This mirrors how actual compliance teams operate and is the honest claim: assurance by measured reliability and sampling, not by reading every item.
+
+**Hash-chained audit log.** Sequential SHA-256 chaining means any edit to any past record invalidates the chain forward. The log's integrity is provable on demand (`verify()`) — not promised by policy.
+
 ## Quickstart
 
 ```bash
@@ -160,3 +172,4 @@ Full design docs including data flow, RACI, control register, and runbook: **[do
 > **Honest measurement is the brand.** Every repo in this three-part series reports its own null or limitation, not a vanity number — assay's eval surfaces a real weakness (the baseline over-blocks, gate-acc 0.60) rather than hiding it.
 
 *Public / synthetic data only. No proprietary content.*
+
