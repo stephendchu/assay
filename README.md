@@ -48,18 +48,7 @@ Around the run: temperature 0 with a pinned model version, every prompt and raw 
 
 ## The gated pipeline
 
-```mermaid
-flowchart TD
-    AI["assess (LLM)<br/>cited claims + abstentions<br/>temp 0 · pinned · logged"] --> G1{"① grounding gate<br/>claim cited verbatim?"}
-    G1 -->|"fabricated"| BLK["BLOCK<br/>nothing ships"]
-    G1 -->|"abstained"| HQ["REVIEW<br/>→ human queue"]
-    G1 -->|"grounded"| G2["② rule checks<br/>timing · blackout · SoD<br/>computed in code"]
-    G2 --> G3{"③ independent review<br/>operator re-performs"}
-    G3 -->|"reject"| BLK
-    G3 -->|"accept"| G4{"④ maker-checker<br/>approver ≠ author"}
-    G4 --> OUT["workpaper · handoff report<br/>tamper-evident audit log"]
-    HQ --> HUM["human reviews<br/>exceptions + sampled approvals"]
-```
+![The gated pipeline](assets/gated-pipeline.png)
 
 ## Walkthrough: one change, two outcomes
 
