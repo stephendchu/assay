@@ -1,5 +1,7 @@
 # assay
 
+[![Tests](https://github.com/stephendchu/assay/actions/workflows/tests.yml/badge.svg)](https://github.com/stephendchu/assay/actions/workflows/tests.yml)
+
 > *as·say (n.) — a test of whether something is what it claims to be. Here: every AI decision in a regulated workflow.*
 
 **Trustworthy AI for compliance — by design, not by hope.** An audit-first governance layer that puts an LLM to work on messy filings, trade records, and change tickets — then catches everything the model gets wrong *before it ships*.
@@ -8,6 +10,11 @@
 > [🔎 Validate](https://stephendchu.github.io/agentic-test-eval/) · [📊 Measure](https://stephendchu.github.io/filing-event-eval/) · **Govern (here)**
 
 > *You don't make the model trustworthy — you make the **system** trustworthy despite the model.*
+
+**At a glance**
+- **Measured** — control-F1 **0.87** [0.73, 1.00] on the gold set, with bootstrap CIs. The eval earns its keep by surfacing a *real weakness* (the deterministic baseline over-claims and over-blocks — gate-accuracy 0.60), not a vanity number.
+- **Tested** — 35 tests, all run **offline** (no API key).
+- **Not vendor-locked** — model-backed runs use Claude or any OpenAI-compatible backend.
 
 ---
 
@@ -110,10 +117,11 @@ Nothing ships. The prompt and raw output are preserved in `llm_mapping.json` so 
 - [x] **Control plane** — checkpointed run loop, tamper-evident audit log, content-hashed artifacts, maker-checker (SoD)
 - [x] **LLM judgment** — Claude does control mapping + evidence sufficiency, with abstention on the unknowable
 - [x] **Two reference domains** — SOX change-management + PAD trade surveillance, one engine
+- [x] **Measured eval** — gold set + control-F1 / precision / recall + bootstrap CIs, runnable offline (control-F1 0.87 on the deterministic baseline)
 - [x] **Observability** — OpenTelemetry / OpenInference spans, Phoenix UI
 
 **Next**
-- [ ] **Measured headline metric** — control-F1 + bootstrap CIs on a larger, less-synthetic gold set (turns orchestration into a *measured* result)
+- [ ] **LLM-vs-baseline headline number** on a larger, less-synthetic gold set — the deterministic baseline is measured; the model result lands here (an honest null if it doesn't beat the baseline)
 - [ ] **Team-handoff & ops reports** as first-class artifacts carrying the audit-log hash
 
 Full plan: **[ROADMAP.md](ROADMAP.md)**.
@@ -148,5 +156,7 @@ src/assay/
 ```
 
 Full design docs including data flow, RACI, control register, and runbook: **[docs/](docs/)**
+
+> **Honest measurement is the brand.** Every repo in this three-part series reports its own null or limitation, not a vanity number — assay's eval surfaces a real weakness (the baseline over-blocks, gate-acc 0.60) rather than hiding it.
 
 *Public / synthetic data only. No proprietary content.*
