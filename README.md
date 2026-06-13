@@ -1,5 +1,9 @@
 # assay
 
+> *as·say (n.) — a test of whether something is what it claims to be. Here: every AI decision in a regulated workflow.*
+
+**Trustworthy AI for compliance — by design, not by hope.** An audit-first governance layer that puts an LLM to work on messy filings, trade records, and change tickets — then catches everything the model gets wrong *before it ships*.
+
 > **🛡 Govern — the system** · part 3 of a 3-part series on measuring & governing AI in regulated domains —
 > [🔎 Validate](https://github.com/stephendchu/agentic-test-eval) · [📊 Measure](https://github.com/stephendchu/filing-event-eval) · **Govern (here)**
 
@@ -98,6 +102,21 @@ Nothing ships. The prompt and raw output are preserved in `llm_mapping.json` so 
 | **Tamper-evident log** — edit any record and `verify()` fails | `test_audit_tamper_is_detected` |
 | **Resumable** — a paused run resumes without recomputation | `test_block_halts_and_resume_is_idempotent` |
 | **Measured** — gold set with control-F1 + bootstrap CIs, honest baseline finding | [docs/EVAL.md](docs/EVAL.md) · `test_deterministic_baseline_runs_and_scores` |
+
+## Status — what's built, what's next
+
+**Working today**
+- [x] **Eval core** — grounding + anti-fabrication gate, composable graders
+- [x] **Control plane** — checkpointed run loop, tamper-evident audit log, content-hashed artifacts, maker-checker (SoD)
+- [x] **LLM judgment** — Claude does control mapping + evidence sufficiency, with abstention on the unknowable
+- [x] **Two reference domains** — SOX change-management + PAD trade surveillance, one engine
+- [x] **Observability** — OpenTelemetry / OpenInference spans, Phoenix UI
+
+**Next**
+- [ ] **Measured headline metric** — control-F1 + bootstrap CIs on a larger, less-synthetic gold set (turns orchestration into a *measured* result)
+- [ ] **Team-handoff & ops reports** as first-class artifacts carrying the audit-log hash
+
+Full plan: **[ROADMAP.md](ROADMAP.md)**.
 
 ## Quickstart
 
